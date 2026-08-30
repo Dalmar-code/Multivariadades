@@ -1,0 +1,6 @@
+{
+  "name": "MultiVariedades ERP & PDV",
+  "description": "Sistema completo para lojas de variedades, ferragens, utilidades e construção com PDV, controle de usuários por perfil, catálogo de 8 fotos, NF-e/NFC-e, Nota Fiscal Paulista, Financeiro e DRE.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
