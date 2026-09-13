@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+:root {
+  --brand-primary: #f59e0b;
+  --brand-secondary: #0f172a;
+  --brand-accent: #d97706;
+  --brand-dark: #d97706;
+  --brand-hover: #fbbf24;
+  --brand-light: rgba(245, 158, 11, 0.1);
+  --brand-light-border: rgba(245, 158, 11, 0.25);
+  --brand-primary-rgb: 245, 158, 11;
+}
+
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
@@ -7,6 +18,42 @@
   code, pre, .font-mono {
     font-family: 'JetBrains Mono', monospace;
   }
+}
+
+/* Dynamic Brand Utility Classes */
+.bg-brand-primary {
+  background-color: var(--brand-primary);
+}
+.bg-brand-primary:hover {
+  background-color: var(--brand-dark);
+}
+.text-brand-primary {
+  color: var(--brand-primary);
+}
+.text-brand-dark {
+  color: var(--brand-dark);
+}
+.border-brand-primary {
+  border-color: var(--brand-primary);
+}
+.bg-brand-light {
+  background-color: var(--brand-light);
+}
+.border-brand-light {
+  border-color: var(--brand-light-border);
+}
+.shadow-brand {
+  box-shadow: 0 10px 15px -3px rgba(var(--brand-primary-rgb), 0.2), 0 4px 6px -4px rgba(var(--brand-primary-rgb), 0.2);
+}
+
+/* Prevent browser autofill from making inputs transparent or text invisible */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #020617 !important;
+  font-weight: 700 !important;
 }
 
 @media print {

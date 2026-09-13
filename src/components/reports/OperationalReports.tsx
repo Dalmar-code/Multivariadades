@@ -13,9 +13,10 @@ import {
   Tag,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
+import { BackButton } from '../common/BackButton';
 
 export const OperationalReports: React.FC = () => {
-  const { sales, products, clients, fiscalInvoices, cashSessions, company, calculateDRE } = useStore();
+  const { sales, products, clients, fiscalInvoices, sessionsHistory, activeSession, company, calculateDRE } = useStore();
 
   const [selectedReport, setSelectedReport] = useState<
     'sales_summary' | 'stock_abc' | 'cashier_audit' | 'fiscal_book' | 'clients_ranking'
@@ -24,17 +25,22 @@ export const OperationalReports: React.FC = () => {
   const [startDate, setStartDate] = useState('2026-08-01');
   const [endDate, setEndDate] = useState('2026-08-31');
 
-  const dre = calculateDRE('2026-08');
+  const dre = calculateDRE(0);
 
   const handlePrint = () => {
     window.print();
   };
 
-  const totalSalesAmount = sales.reduce((acc, s) => acc + s.finalTotal, 0);
+  const totalSalesAmount = sales.reduce((acc, s) => acc + (s.total || 0), 0);
   const totalItemsSold = sales.reduce(
-    (acc, s) => acc + s.items.reduce((sum, item) => sum + item.quantity, 0),
+    (acc, s) => acc + (s.items || []).reduce((sum, item) => sum + (item.quantity || 0), 0),
     0
   );
+
+  const allCashSessions = [
+    ...(activeSession ? [activeSession] : []),
+    ...(sessionsHistory || []),
+  ];
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
@@ -52,15 +58,18 @@ export const OperationalReports: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          id="btn-print-report"
-          onClick={handlePrint}
-          className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-2 transition-all"
-        >
-          <Printer className="w-4 h-4 text-amber-400" />
-          Imprimir Relatório Selecionado (PDF)
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <BackButton variant="light" label="Voltar ao Menu" className="px-3.5 py-2.5 text-xs sm:text-sm" />
+          <button
+            type="button"
+            id="btn-print-report"
+            onClick={handlePrint}
+            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+          >
+            <Printer className="w-4 h-4 text-amber-400" />
+            Imprimir Relatório Selecionado (PDF)
+          </button>
+        </div>
       </div>
 
       {/* Report Selection Grid */}
@@ -141,7 +150,7 @@ export const OperationalReports: React.FC = () => {
               Nome Fantasia: <strong>{company.tradeName}</strong> • CNPJ: {company.cnpj} • IE: {company.stateRegistration}
             </p>
             <p className="text-[11px] text-slate-500">
-              {company.address.street}, {company.address.number} - {company.address.city}/{company.address.state} • Fone: {company.phone}
+              {company.address?.street ? `${company.address.street}, ${company.address.number || 'S/N'} - ${company.address.city || ''}/${company.address.state || 'SP'}` : 'Endereço Comercial'} • Fone: {company.phone || 'Em configuração'}
             </p>
           </div>
           <div className="text-right text-[11px] text-slate-600">
@@ -195,7 +204,7 @@ export const OperationalReports: React.FC = () => {
                     <td className="p-2">{s.cashierName}</td>
                     <td className="p-2">{s.cpfNaNota ? `CPF: ${s.cpfNaNota}` : 'Consumidor Final'}</td>
                     <td className="p-2 uppercase font-mono text-[10px]">{s.payments.map((p) => p.method).join(', ')}</td>
-                    <td className="p-2 text-right font-black">R$ {s.finalTotal.toFixed(2)}</td>
+                    <td className="p-2 text-right font-black">R$ {(s.total || 0).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -266,9 +275,9 @@ export const OperationalReports: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {cashSessions.map((cs) => {
-                  const sangrias = cs.movements.filter((m) => m.type === 'sangria').reduce((a, m) => a + m.amount, 0);
-                  const totalVendas = cs.movements.filter((m) => m.type === 'venda').reduce((a, m) => a + m.amount, 0);
+                {allCashSessions.map((cs) => {
+                  const sangrias = (cs.movements || []).filter((m) => m.type === 'sangria').reduce((a, m) => a + m.amount, 0);
+                  const totalVendas = (cs.movements || []).filter((m) => m.type === 'venda').reduce((a, m) => a + m.amount, 0);
                   return (
                     <tr key={cs.id}>
                       <td className="p-2 font-bold">{cs.cashierName}</td>
@@ -277,10 +286,10 @@ export const OperationalReports: React.FC = () => {
                       <td className="p-2 text-right">R$ {cs.initialBalance.toFixed(2)}</td>
                       <td className="p-2 text-right font-bold text-emerald-700">R$ {totalVendas.toFixed(2)}</td>
                       <td className="p-2 text-right text-rose-700">R$ {sangrias.toFixed(2)}</td>
-                      <td className="p-2 text-right font-black">R$ {(cs.finalBalance || 0).toFixed(2)}</td>
+                      <td className="p-2 text-right font-black">R$ {(cs.calculatedBalance?.total || cs.initialBalance || 0).toFixed(2)}</td>
                       <td className="p-2 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${cs.status === 'aberto' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
-                          {cs.status.toUpperCase()}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${cs.status === 'open' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                          {cs.status === 'open' ? 'ABERTO' : 'FECHADO'}
                         </span>
                       </td>
                     </tr>

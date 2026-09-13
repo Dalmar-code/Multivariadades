@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Search,
   Tag,
@@ -13,15 +13,27 @@ import {
   MapPin,
   Barcode,
   Info,
+  User,
+  Layers,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { Product, ProductCategory, Client } from '../../types';
+import { RETAIL_NICHES } from '../../utils/retailNiches';
+import { BackButton } from '../common/BackButton';
 
 export const SellerView: React.FC = () => {
-  const { products, clients, currentUser, finalizeSale, activeSession } = useStore();
+  const {
+    products,
+    clients,
+    currentUser,
+    companyNiche,
+    customCategories,
+    addPreSale,
+    company,
+  } = useStore();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [selectedProductDetails, setSelectedProductDetails] = useState<Product | null>(null);
 
   // Seller Order Draft
@@ -30,6 +42,7 @@ export const SellerView: React.FC = () => {
   >([]);
   const [clientName, setClientName] = useState('');
   const [clientCpf, setClientCpf] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [orderNotes, setOrderNotes] = useState('');
   const [lastGeneratedQuote, setLastGeneratedQuote] = useState<{
     code: string;
@@ -40,21 +53,38 @@ export const SellerView: React.FC = () => {
     date: string;
   } | null>(null);
 
-  const categories = [
-    'Todas',
-    'Ferragens',
-    'Limpeza',
-    'Construção',
-    'Casa & Utilidades',
-    'Papelaria',
-    'Ferramentas',
-    'Elétrica & Hidráulica',
-    'Pintura',
-  ];
+  // Active Niche configured by the administrator - Strictly filter departments and products
+  const activeNicheId = company.niche || companyNiche || 'supermercado';
+  const nicheInfo = RETAIL_NICHES[activeNicheId] || RETAIL_NICHES.supermercado;
+
+  const nicheDepartments = useMemo(() => {
+    const list: string[] = ['Todos'];
+    if (nicheInfo?.departments) {
+      nicheInfo.departments.forEach((d) => {
+        if (!list.includes(d.name)) list.push(d.name);
+      });
+    }
+    // Only allow custom categories belonging to this specific niche
+    customCategories.forEach((c) => {
+      if (!list.includes(c.department)) {
+        if (!c.niche || c.niche === activeNicheId) {
+          list.push(c.department);
+        }
+      }
+    });
+    return list;
+  }, [nicheInfo, customCategories, activeNicheId]);
 
   const filteredProducts = products.filter((p) => {
-    if (!p.active) return false;
-    const matchesCat = selectedCategory === 'Todas' || p.category === selectedCategory;
+    // Hide products belonging explicitly to other retail niches
+    if (p.niche && p.niche !== activeNicheId) {
+      return false;
+    }
+
+    const matchesCat =
+      selectedCategory === 'Todos' ||
+      p.department === selectedCategory ||
+      p.category === selectedCategory;
     const matchesSearch =
       searchTerm === '' ||
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -108,20 +138,57 @@ export const SellerView: React.FC = () => {
   const orderDiscount = orderItems.reduce((acc, i) => acc + i.discount * i.quantity, 0);
   const orderTotal = orderSubtotal - orderDiscount;
 
+  const handleSelectClient = (clientId: string) => {
+    setSelectedClientId(clientId);
+    const found = clients.find((c) => c.id === clientId);
+    if (found) {
+      setClientName(found.name);
+      setClientCpf(found.document || '');
+    }
+  };
+
   const handleGenerateQuote = () => {
     if (orderItems.length === 0) return;
     const quoteCode = `PV-${Math.floor(1000 + Math.random() * 9000)}`;
+    const finalClientName = clientName.trim() || 'Cliente Balcão';
+    const finalClientCpf = clientCpf.trim();
+
+    // Persist in StoreContext preSales for PDV cashier retrieval
+    addPreSale({
+      code: quoteCode,
+      sellerId: currentUser?.id,
+      sellerName: currentUser?.name || 'Vendedor Balcão',
+      clientId: selectedClientId || undefined,
+      clientName: finalClientName,
+      clientCpf: finalClientCpf || undefined,
+      items: orderItems.map((item) => ({
+        product: item.product,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+        total: item.total,
+        variation: item.product.hasVariations ? item.product.variations?.[0] : undefined,
+      })),
+      subtotal: orderSubtotal,
+      discount: orderDiscount,
+      total: orderTotal,
+      notes: orderNotes.trim() || undefined,
+    });
+
     setLastGeneratedQuote({
       code: quoteCode,
       items: [...orderItems],
       total: orderTotal,
-      clientName: clientName || 'Cliente Balcão',
-      clientCpf: clientCpf || '',
+      clientName: finalClientName,
+      clientCpf: finalClientCpf,
       date: new Date().toLocaleString('pt-BR'),
     });
+
     setOrderItems([]);
     setClientName('');
     setClientCpf('');
+    setSelectedClientId('');
+    setOrderNotes('');
   };
 
   return (
@@ -144,6 +211,10 @@ export const SellerView: React.FC = () => {
             </div>
           </div>
         </div>
+
+        <div className="flex items-center gap-2">
+          <BackButton variant="dark" label="Voltar ao Menu" className="bg-blue-950/60 hover:bg-blue-900 border-blue-800/60 text-white" />
+        </div>
       </div>
 
       {/* Main Grid: Catalog and Order Builder */}
@@ -164,13 +235,23 @@ export const SellerView: React.FC = () => {
               />
             </div>
 
+            <div className="flex items-center justify-between gap-2 pb-1 border-b border-slate-100">
+              <span className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                <Layers className="w-3.5 h-3.5 text-blue-600" />
+                Departamentos do Nicho ({nicheInfo?.name || 'Geral'})
+              </span>
+              <span className="text-[10px] text-blue-600 font-semibold">
+                {filteredProducts.length} produto(s)
+              </span>
+            </div>
+
             <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs">
-              {categories.map((cat) => (
+              {nicheDepartments.map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                  className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
                     selectedCategory === cat
                       ? 'bg-blue-600 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -262,7 +343,26 @@ export const SellerView: React.FC = () => {
 
             {/* Client Info */}
             <div className="my-3 space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-              <div className="font-bold text-slate-700">Identificação do Cliente (Opcional):</div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-700 flex items-center gap-1">
+                  <User className="w-3.5 h-3.5 text-blue-600" />
+                  Identificação do Cliente:
+                </span>
+                {clients.length > 0 && (
+                  <select
+                    value={selectedClientId}
+                    onChange={(e) => handleSelectClient(e.target.value)}
+                    className="text-[11px] font-semibold text-blue-700 bg-white border border-slate-200 rounded-lg px-2 py-0.5"
+                  >
+                    <option value="">Selecionar Cadastrado...</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.document ? `(${c.document})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input
                   type="text"
@@ -281,6 +381,13 @@ export const SellerView: React.FC = () => {
                   className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 bg-white font-mono"
                 />
               </div>
+              <input
+                type="text"
+                value={orderNotes}
+                onChange={(e) => setOrderNotes(e.target.value)}
+                placeholder="Observações do pedido (ex: entregar no balcão de tintas)..."
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 bg-white text-[11px]"
+              />
             </div>
 
             {/* Items list */}

@@ -12,12 +12,16 @@ import {
   Lock,
   Mail,
   User,
+  Building2,
+  ArrowRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { UserRole } from '../../types';
+import { BackButton } from '../common/BackButton';
 
 export const UserManager: React.FC = () => {
-  const { users, addUser, deleteUser, currentUser } = useStore();
+  const { users, addUser, deleteUser, currentUser, company, isCompanyConfigured, setActiveTab } = useStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [name, setName] = useState('');
@@ -42,9 +46,11 @@ export const UserManager: React.FC = () => {
 
     addUser({
       name,
+      username: email ? email.split('@')[0] : name.toLowerCase().replace(/\s+/g, '_'),
       email,
       role,
       password,
+      active: true,
     });
 
     setIsModalOpen(false);
@@ -103,16 +109,46 @@ export const UserManager: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          id="btn-new-user"
-          onClick={() => setIsModalOpen(true)}
-          className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-sm shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all"
-        >
-          <UserPlus className="w-4 h-4" />
-          Novo Usuário
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <BackButton variant="light" label="Voltar ao Menu" className="px-3.5 py-2.5 text-xs sm:text-sm" />
+          <button
+            type="button"
+            id="btn-new-user"
+            onClick={() => setIsModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-sm shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            Novo Usuário
+          </button>
+        </div>
       </div>
+
+      {/* Alerta de Cadastro da Empresa Completo */}
+      {(!company.cnpj || !company.tradeName || !isCompanyConfigured) && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-3">
+            <Building2 className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-xs sm:text-sm font-black text-slate-900">
+                Cadastro de Dados da Empresa
+              </h3>
+              <p className="text-xs text-slate-700 mt-0.5 leading-relaxed">
+                Para que novos operadores de caixa e vendedores possam operar o sistema com emissão de comprovantes e notas fiscais corretas, conclua o preenchimento de todos os dados cadastrais da loja em <strong>Dados da Empresa</strong>.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            id="btn-goto-company-from-users"
+            onClick={() => setActiveTab('empresa')}
+            className="shrink-0 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Completar Dados da Empresa</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Role Explanations Banner */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

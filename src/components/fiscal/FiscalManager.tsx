@@ -18,6 +18,7 @@ import {
 import { useStore } from '../../context/StoreContext';
 import { FiscalInvoice } from '../../types';
 import { DanfeModal } from './DanfeModal';
+import { BackButton } from '../common/BackButton';
 
 export const FiscalManager: React.FC = () => {
   const {
@@ -36,9 +37,9 @@ export const FiscalManager: React.FC = () => {
   // Settings State
   const [environment, setEnvironment] = useState(fiscalConfig.environment);
   const [nfeSeries, setNfeSeries] = useState(fiscalConfig.nfeSeries);
-  const [nextNfeNumber, setNextNfeNumber] = useState(fiscalConfig.nextNfeNumber);
+  const [nfeNextNumber, setNfeNextNumber] = useState(fiscalConfig.nfeNextNumber);
   const [nfceSeries, setNfceSeries] = useState(fiscalConfig.nfceSeries);
-  const [nextNfceNumber, setNextNfceNumber] = useState(fiscalConfig.nextNfceNumber);
+  const [nfceNextNumber, setNfceNextNumber] = useState(fiscalConfig.nfceNextNumber);
   const [cscToken, setCscToken] = useState(fiscalConfig.cscToken);
   const [cscId, setCscId] = useState(fiscalConfig.cscId);
   const [certificateExpiry, setCertificateExpiry] = useState(fiscalConfig.certificateExpiry);
@@ -61,16 +62,16 @@ export const FiscalManager: React.FC = () => {
     updateFiscalConfig({
       environment,
       nfeSeries: Number(nfeSeries) || 1,
-      nextNfeNumber: Number(nextNfeNumber) || 1,
+      nfeNextNumber: Number(nfeNextNumber) || 1,
       nfceSeries: Number(nfceSeries) || 1,
-      nextNfceNumber: Number(nextNfceNumber) || 1,
+      nfceNextNumber: Number(nfceNextNumber) || 1,
       cscToken,
       cscId,
       certificateExpiry,
       ibptEstimatedTaxPercent: Number(ibptEstimatedTaxPercent) || 0,
     });
     setSavedFeedback(true);
-    setTimeout(() => setSavedFeedback(false), 3000);
+    setTimeout(() => setSavedFeedback(false), 2000);
   };
 
   const handleCancelInvoice = (id: string, num: number) => {
@@ -113,26 +114,29 @@ export const FiscalManager: React.FC = () => {
           </p>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setActiveTab('invoices')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'invoices' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Documentos Emitidos ({fiscalInvoices.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'settings' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Configurações Fiscais & Certificado
-          </button>
+        {/* Right side: BackButton and Tab Switcher */}
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+          <BackButton variant="light" label="Voltar ao Menu" className="px-3.5 py-2 text-xs" />
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setActiveTab('invoices')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'invoices' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Documentos Emitidos ({fiscalInvoices.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('settings')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'settings' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Configurações Fiscais & Certificado
+            </button>
+          </div>
         </div>
       </div>
 
@@ -150,7 +154,7 @@ export const FiscalManager: React.FC = () => {
               />
             </div>
             <div className="text-xs text-slate-500">
-              Total Faturado em Notas: <strong>R$ {fiscalInvoices.reduce((acc, i) => acc + (i.status === 'AUTORIZADA' ? i.totalInvoice : 0), 0).toFixed(2)}</strong>
+              Total Faturado em Notas: <strong>R$ {fiscalInvoices.reduce((acc, i) => acc + (i.status === 'authorized' ? i.totalInvoice : 0), 0).toFixed(2)}</strong>
             </div>
           </div>
 
@@ -210,7 +214,7 @@ export const FiscalManager: React.FC = () => {
                       </td>
 
                       <td className="py-3 px-4 text-center">
-                        {inv.status === 'AUTORIZADA' ? (
+                        {inv.status === 'authorized' ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
                             <CheckCircle2 className="w-3 h-3" /> AUTORIZADA
                           </span>
@@ -232,7 +236,7 @@ export const FiscalManager: React.FC = () => {
                             <Printer className="w-3 h-3" /> DANFE
                           </button>
 
-                          {inv.status === 'AUTORIZADA' && (
+                          {inv.status === 'authorized' && (
                             <button
                               type="button"
                               onClick={() => handleCancelInvoice(inv.id, inv.number)}
@@ -334,8 +338,8 @@ export const FiscalManager: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Próxima NF-e</label>
                 <input
                   type="number"
-                  value={nextNfeNumber}
-                  onChange={(e) => setNextNfeNumber(parseInt(e.target.value, 10))}
+                  value={nfeNextNumber}
+                  onChange={(e) => setNfeNextNumber(parseInt(e.target.value, 10))}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500 bg-white"
                 />
               </div>
@@ -354,8 +358,8 @@ export const FiscalManager: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Próxima NFC-e</label>
                 <input
                   type="number"
-                  value={nextNfceNumber}
-                  onChange={(e) => setNextNfceNumber(parseInt(e.target.value, 10))}
+                  value={nfceNextNumber}
+                  onChange={(e) => setNfceNextNumber(parseInt(e.target.value, 10))}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500 bg-white"
                 />
               </div>

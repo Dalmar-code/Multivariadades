@@ -54,16 +54,16 @@ export const DanfeModal: React.FC<DanfeModalProps> = ({ invoice, onClose }) => {
         <xNome>${company.corporateName}</xNome>
         <xFant>${company.tradeName}</xFant>
         <enderEmit>
-          <xLgr>${company.address.street}</xLgr>
-          <nro>${company.address.number}</nro>
-          <xBairro>${company.address.neighborhood}</xBairro>
+          <xLgr>${company.address?.street || 'Avenida Principal'}</xLgr>
+          <nro>${company.address?.number || 'S/N'}</nro>
+          <xBairro>${company.address?.neighborhood || 'Centro'}</xBairro>
           <cMun>3550308</cMun>
-          <xMun>${company.address.city}</xMun>
-          <UF>${company.address.state}</UF>
-          <CEP>${company.address.cep.replace(/\D/g, '')}</CEP>
+          <xMun>${company.address?.city || 'São Paulo'}</xMun>
+          <UF>${company.address?.state || 'SP'}</UF>
+          <CEP>${(company.address?.cep || '01001000').replace(/\D/g, '')}</CEP>
           <cPais>1058</cPais>
           <xPais>BRASIL</xPais>
-          <fone>${company.phone.replace(/\D/g, '')}</fone>
+          <fone>${(company.phone || '11999999999').replace(/\D/g, '')}</fone>
         </enderEmit>
         <IE>${company.stateRegistration.replace(/\D/g, '')}</IE>
         <CRT>${company.crt}</CRT>
@@ -155,13 +155,22 @@ export const DanfeModal: React.FC<DanfeModalProps> = ({ invoice, onClose }) => {
           <div className="border border-slate-900 grid grid-cols-12">
             {/* Emitente Info */}
             <div className="col-span-5 p-3 border-r border-slate-900 space-y-1">
+              {company.logoUrl && (
+                <div className="mb-2">
+                  <img
+                    src={company.logoUrl}
+                    alt="Logo"
+                    className="max-h-12 max-w-[160px] object-contain filter grayscale contrast-125"
+                  />
+                </div>
+              )}
               <h2 className="font-extrabold text-sm uppercase">{company.tradeName}</h2>
               <p className="font-bold text-xs">{company.corporateName}</p>
               <p className="text-[11px] text-slate-700">
-                {company.address.street}, Nº {company.address.number} {company.address.complement ? `- ${company.address.complement}` : ''}
+                {company.address?.street || 'Endereço Comercial'}, Nº {company.address?.number || 'S/N'} {company.address?.complement ? `- ${company.address.complement}` : ''}
               </p>
               <p className="text-[11px] text-slate-700">
-                Bairro: {company.address.neighborhood} - {company.address.city}/{company.address.state} - CEP: {company.address.cep}
+                Bairro: {company.address?.neighborhood || 'Centro'} - {company.address?.city || 'São Paulo'}/{company.address?.state || 'SP'} - CEP: {company.address?.cep || '00000-000'}
               </p>
               <p className="text-[11px]">Telefone: {company.phone}</p>
             </div>

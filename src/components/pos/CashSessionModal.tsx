@@ -10,6 +10,10 @@ import {
   Clock,
   Printer,
   FileSpreadsheet,
+  AlertTriangle,
+  Monitor,
+  Calendar,
+  ShieldAlert,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { CashRegisterSession } from '../../types';
@@ -30,10 +34,19 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
     currentUser,
     sales,
     company,
+    pdvRegisters,
+    selectedPdvId,
+    setSelectedPdvId,
+    isPdvClosedToday,
+    canOpenCashSession,
   } = useStore();
 
   // Abertura
+  const [selectedTerminalId, setSelectedTerminalId] = useState<string>(
+    selectedPdvId || (pdvRegisters[0]?.id ?? 'pdv_01')
+  );
   const [initialBalance, setInitialBalance] = useState<number>(200.0);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   // Fechamento - Valores Declarados pelo Operador
   const [declaredDinheiro, setDeclaredDinheiro] = useState<number>(0);
@@ -42,6 +55,7 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
   const [declaredCredito, setDeclaredCredito] = useState<number>(0);
   const [declaredPrazo, setDeclaredPrazo] = useState<number>(0);
   const [notes, setNotes] = useState<string>('');
+  const [isConfirmingClose, setIsConfirmingClose] = useState<boolean>(false);
 
   // Sangria & Suprimento
   const [movementAmount, setMovementAmount] = useState<number>(50.0);
@@ -51,16 +65,29 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
 
   if (!isOpen) return null;
 
+  const currentTerminalClosedToday = isPdvClosedToday(selectedTerminalId);
+  const checkOpen = canOpenCashSession(selectedTerminalId);
+
   // Handler for Opening Cash Session
   const handleOpenSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    openCashSession(Number(initialBalance) || 0);
-    onClose();
+    setOpenError(null);
+    try {
+      openCashSession(Number(initialBalance) || 0, selectedTerminalId);
+      onClose();
+    } catch (err: any) {
+      setOpenError(err.message || 'Erro ao abrir caixa.');
+    }
   };
 
-  // Handler for Closing Cash Session
-  const handleCloseSubmit = (e: React.FormEvent) => {
+  // Step 1 of Closing: Review & Show Confirmation Prompt
+  const handleReviewClose = (e: React.FormEvent) => {
     e.preventDefault();
+    setIsConfirmingClose(true);
+  };
+
+  // Step 2: Final Definite Close Execution
+  const handleFinalCloseConfirm = () => {
     const total =
       Number(declaredDinheiro) +
       Number(declaredPix) +
@@ -79,6 +106,7 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
       },
       notes
     );
+    setIsConfirmingClose(false);
     onClose();
   };
 
@@ -97,10 +125,12 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
     }
   };
 
-  // Print current session summary
-  const handlePrintSession = () => {
-    window.print();
-  };
+  const calculatedCloseTotal =
+    Number(declaredDinheiro) +
+    Number(declaredPix) +
+    Number(declaredDebito) +
+    Number(declaredCredito) +
+    Number(declaredPrazo);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs overflow-y-auto">
@@ -115,8 +145,8 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
             {mode === 'history' && <Clock className="w-5 h-5 text-blue-400" />}
 
             <h3 className="font-bold text-base">
-              {mode === 'open_session' && 'Abertura de Caixa (PDV)'}
-              {mode === 'close_session' && 'Fechamento de Caixa & Prestação de Contas'}
+              {mode === 'open_session' && 'Abertura de Caixa (Terminal PDV)'}
+              {mode === 'close_session' && 'Fechamento Definitivo de Turno PDV'}
               {mode === 'sangria' && 'Sangria de Caixa (Retirada de Dinheiro)'}
               {mode === 'suprimento' && 'Suprimento de Caixa (Entrada de Troco)'}
               {mode === 'history' && 'Histórico de Fechamentos de Caixa'}
@@ -125,7 +155,10 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
           <button
             type="button"
             id="btn-close-cash-modal"
-            onClick={onClose}
+            onClick={() => {
+              setIsConfirmingClose(false);
+              onClose();
+            }}
             className="text-slate-400 hover:text-white text-lg font-bold p-1"
           >
             ✕
@@ -137,14 +170,85 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
           {/* MODE: OPEN SESSION */}
           {mode === 'open_session' && (
             <form onSubmit={handleOpenSubmit} className="space-y-4">
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm">
-                <p className="font-semibold mb-1">Iniciar Novo Turno de Caixa</p>
-                <p className="text-xs text-emerald-700">
-                  Operador:{' '}
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs">
+                <div className="flex items-center gap-2 font-bold text-emerald-950 mb-1">
+                  <Unlock className="w-4 h-4 text-emerald-600" />
+                  <span>Abertura de Turno Diário de Vendas</span>
+                </div>
+                <p className="text-emerald-800">
+                  Operador responsável:{' '}
                   <strong>{currentUser?.name || 'Operador de Caixa'}</strong> • Data:{' '}
-                  {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
+                  {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
+
+              {/* Terminal Selection */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Selecionar Terminal de Caixa PDV *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {pdvRegisters.map((pdv) => {
+                    const isClosed = isPdvClosedToday(pdv.id);
+                    const isSelected = selectedTerminalId === pdv.id;
+                    return (
+                      <button
+                        key={pdv.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTerminalId(pdv.id);
+                          setOpenError(null);
+                        }}
+                        className={`text-left p-3 rounded-xl border transition-all flex flex-col justify-between ${
+                          isSelected
+                            ? 'border-emerald-600 bg-emerald-50/50 ring-2 ring-emerald-500/20'
+                            : 'border-slate-200 hover:border-slate-300 bg-slate-50/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                            <Monitor className="w-3.5 h-3.5 text-slate-600" />
+                            {pdv.code} - {pdv.name}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 mb-1.5">
+                          {pdv.location || 'Frente de Loja'}
+                        </div>
+                        <div>
+                          {isClosed ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
+                              <Lock className="w-2.5 h-2.5" /> Fechado Hoje (Turno Concluído)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-2.5 h-2.5" /> Disponível para Abertura
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {currentTerminalClosedToday && (
+                <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-900 flex items-start gap-2.5">
+                  <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block font-bold text-rose-950">Abertura Bloqueada para Este Caixa Hoje</strong>
+                    Este terminal PDV já realizou a abertura e o fechamento do dia hoje ({new Date().toLocaleDateString('pt-BR')}).
+                    Pelas regras de segurança, conformidade e integridade contábil, <strong>cada caixa só pode ser aberto uma vez ao dia</strong>.
+                    A reabertura estará liberada a partir de amanhã.
+                  </div>
+                </div>
+              )}
+
+              {openError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span>{openError}</span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
@@ -159,10 +263,11 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
                     step="0.01"
                     min="0"
                     required
+                    disabled={currentTerminalClosedToday}
                     id="input-initial-balance"
                     value={initialBalance}
                     onChange={(e) => setInitialBalance(parseFloat(e.target.value) || 0)}
-                    className="w-full pl-12 pr-4 py-3 text-lg font-bold rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                    className="w-full pl-12 pr-4 py-3 text-lg font-bold rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-slate-100 disabled:text-slate-400"
                   />
                 </div>
               </div>
@@ -172,8 +277,9 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
                   <button
                     key={val}
                     type="button"
+                    disabled={currentTerminalClosedToday}
                     onClick={() => setInitialBalance(val)}
-                    className="flex-1 py-1.5 px-2 text-xs font-bold rounded-lg border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 text-slate-700"
+                    className="flex-1 py-1.5 px-2 text-xs font-bold rounded-lg border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 text-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
                   >
                     R$ {val}
                   </button>
@@ -190,8 +296,9 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
                 </button>
                 <button
                   type="submit"
+                  disabled={currentTerminalClosedToday}
                   id="btn-confirm-open-cash"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md shadow-emerald-600/20 flex items-center gap-2"
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md shadow-emerald-600/20 flex items-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed"
                 >
                   <Unlock className="w-4 h-4" />
                   Abrir Caixa Agora
@@ -201,13 +308,18 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
           )}
 
           {/* MODE: CLOSE SESSION */}
-          {mode === 'close_session' && activeSession && (
-            <form onSubmit={handleCloseSubmit} className="space-y-4">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          {mode === 'close_session' && activeSession && !isConfirmingClose && (
+            <form onSubmit={handleReviewClose} className="space-y-4">
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="block text-sm font-bold">Conferência de Fechamento de Caixa</strong>
-                  Conte os valores físicos na gaveta e maquinetas e informe abaixo. O sistema calculará a conciliação automaticamente.
+                  <strong className="block text-sm font-bold text-amber-950">
+                    Conferência e Fechamento de Turno ({activeSession.pdvName || 'Caixa PDV'})
+                  </strong>
+                  <p className="text-amber-800 mt-0.5">
+                    Conte todos os valores físicos na gaveta e nos comprovantes de maquininhas.
+                    O sistema fará a conciliação automática com as vendas registradas.
+                  </p>
                 </div>
               </div>
 
@@ -282,9 +394,16 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
                   id="input-close-notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Ex: Turno encerrado sem divergências / gaveta entregue ao gerente."
+                  placeholder="Ex: Turno concluído sem pendências / malote entregue à gerência."
                   className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-amber-500 bg-white"
                 />
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                <span className="text-slate-600 font-medium">Total Declarado pelo Operador:</span>
+                <span className="text-base font-bold text-slate-900 font-mono">
+                  R$ {calculatedCloseTotal.toFixed(2)}
+                </span>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
@@ -293,18 +412,85 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
                   onClick={onClose}
                   className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-medium text-sm hover:bg-slate-50"
                 >
-                  Voltar
+                  Cancelar
                 </button>
                 <button
                   type="submit"
-                  id="btn-confirm-close-cash"
+                  id="btn-proceed-close-cash"
                   className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md shadow-amber-600/20 flex items-center gap-2"
                 >
                   <Lock className="w-4 h-4" />
-                  Fechar Caixa e Emitir Relatório
+                  Prosseguir para Fechamento
                 </button>
               </div>
             </form>
+          )}
+
+          {/* MODE: CLOSE SESSION - CONFIRMATION STEP (Rule: Fechamento Único Diário) */}
+          {mode === 'close_session' && activeSession && isConfirmingClose && (
+            <div className="space-y-5 animate-in fade-in duration-150">
+              <div className="p-4 bg-rose-50 border-2 border-rose-400 rounded-2xl text-rose-950 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black tracking-tight text-rose-950 uppercase">
+                      Confirmar Fechamento Definitivo?
+                    </h4>
+                    <p className="text-xs font-semibold text-rose-800">
+                      Atenção: Esta ação é definitiva e não poderá ser desfeita hoje!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white rounded-xl border border-rose-200 text-xs space-y-1.5 text-slate-800">
+                  <div className="flex justify-between border-b border-slate-100 pb-1 font-medium">
+                    <span className="text-slate-600">Terminal de Caixa:</span>
+                    <strong className="text-slate-900">{activeSession.pdvName || 'Caixa PDV 01'}</strong>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-100 pb-1">
+                    <span className="text-slate-600">Operador:</span>
+                    <span className="font-semibold text-slate-900">{activeSession.cashierName}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-100 pb-1">
+                    <span className="text-slate-600">Total Declarado:</span>
+                    <span className="font-bold text-emerald-700 font-mono">
+                      R$ {calculatedCloseTotal.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between pt-0.5">
+                    <span className="text-slate-600">Data do Turno:</span>
+                    <span className="text-slate-700">{new Date().toLocaleDateString('pt-BR')}</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-rose-100/80 rounded-xl text-xs text-rose-950 font-medium leading-relaxed border border-rose-300">
+                  ⚠️ <strong>Regra de Segurança e Conformidade:</strong> O caixa PDV só pode ser aberto ou fechado <strong>uma única vez ao dia</strong>.
+                  Após confirmar, este caixa será bloqueado para novas vendas hoje e <strong>não haverá como reabri-lo no mesmo dia</strong> (a reabertura estará disponível apenas a partir de amanhã).
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-end gap-2.5 pt-1">
+                <button
+                  type="button"
+                  id="btn-cancel-close-confirmation"
+                  onClick={() => setIsConfirmingClose(false)}
+                  className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-all text-center"
+                >
+                  Não, Voltar e Continuar Vendas
+                </button>
+                <button
+                  type="button"
+                  id="btn-final-confirm-close"
+                  onClick={handleFinalCloseConfirm}
+                  className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 transition-all"
+                >
+                  <Lock className="w-4 h-4" />
+                  Sim, Fechar e Encerrar Caixa do Dia
+                </button>
+              </div>
+            </div>
           )}
 
           {/* MODE: SANGRIA OU SUPRIMENTO */}
@@ -389,8 +575,9 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
           {/* MODE: HISTORY */}
           {mode === 'history' && (
             <div className="space-y-4">
-              <div className="text-xs text-slate-500">
-                Total de fechamentos registrados: <strong>{sessionsHistory.length}</strong>
+              <div className="text-xs text-slate-500 flex justify-between items-center">
+                <span>Total de fechamentos registrados: <strong>{sessionsHistory.length}</strong></span>
+                <span className="text-[11px] text-slate-400">Auditoria e Conferência Contábil</span>
               </div>
 
               {sessionsHistory.length === 0 ? (
@@ -398,15 +585,18 @@ export const CashSessionModal: React.FC<CashSessionModalProps> = ({ isOpen, onCl
                   Nenhum fechamento de caixa anterior registrado ainda.
                 </div>
               ) : (
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
                   {sessionsHistory.map((sess) => (
                     <div
                       key={sess.id}
                       className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white text-xs transition-all space-y-2"
                     >
                       <div className="flex items-center justify-between font-bold text-slate-800">
-                        <span>Operador: {sess.cashierName}</span>
-                        <span className="text-emerald-700 font-mono">
+                        <span className="flex items-center gap-1.5">
+                          <Monitor className="w-3.5 h-3.5 text-slate-500" />
+                          {sess.pdvName || 'Caixa PDV'} • {sess.cashierName}
+                        </span>
+                        <span className="text-emerald-700 font-mono font-bold">
                           Total: R$ {sess.calculatedBalance?.total.toFixed(2) || '0.00'}
                         </span>
                       </div>
